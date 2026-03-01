@@ -18,7 +18,7 @@ Author: Hamdi Altaheri
 
 import math
 import tensorflow as tf
-from tensorflow.keras.layers import GlobalAveragePooling2D, GlobalMaxPooling2D, Reshape, Dense
+from tensorflow.keras.layers import GlobalAveragePooling2D, GlobalMaxPooling2D, Reshape, Dense, Conv1D
 from tensorflow.keras.layers import multiply, Permute, Concatenate, Conv2D, Add, Activation, Lambda
 from tensorflow.keras.layers import Dropout, MultiHeadAttention, LayerNormalization
 from tensorflow.keras import backend as K
@@ -135,6 +135,20 @@ def channel_attention(input_feature, ratio=8):
     if K.image_data_format() == "channels_first":
         cbam_feature = Permute((3, 1, 2))(cbam_feature)
     return multiply([input_feature, cbam_feature])
+
+
+def eca_attention(input_feature, gama=2, b=1):
+    """Efficient Channel Attention (ECA). From DB-ATCNet: https://github.com/zk-xju/DB-ATCNet"""
+    in_channel = input_feature.shape[-1]
+    kernel_size = int(abs((math.log(in_channel, 2) + b) / gama))
+    if kernel_size % 2 == 0:
+        kernel_size = kernel_size + 1
+    x = GlobalAveragePooling2D()(input_feature)
+    x = Reshape(target_shape=(in_channel, 1))(x)
+    x = Conv1D(filters=1, kernel_size=kernel_size, padding='same', use_bias=False)(x)
+    x = tf.nn.sigmoid(x)
+    x = Reshape((1, 1, in_channel))(x)
+    return multiply([input_feature, x])
 
 
 def spatial_attention(input_feature):

@@ -19,7 +19,7 @@ from tensorflow.keras.regularizers import L2
 from tensorflow.keras.constraints import max_norm
 from tensorflow.keras import backend as K
 
-from attention_models import attention_block
+from attention_models import attention_block, eca_attention
 
 
 def ATCNet_(n_classes, in_chans=22, in_samples=1125, n_windows=5, attention='mha',
@@ -346,6 +346,110 @@ def DeepConvNet(nb_classes, Chans=64, Samples=256, dropoutRate=0.5):
     dense = Dense(nb_classes, kernel_constraint=max_norm(0.5))(flatten)
     softmax = Activation('softmax')(dense)
     return Model(inputs=input_main, outputs=softmax)
+
+
+def DB_ATCNet(n_classes, in_chans=22, in_samples=1125, n_windows=3, attention='mha',
+              eegn_F1=16, eegn_D=2, eegn_kernelSize=64, eegn_poolSize=8, eegn_dropout=0.3,
+              tcn_depth=2, tcn_kernelSize=4, tcn_filters=32, tcn_dropout=0.3,
+              tcn_activation='elu', fuse='average', drop1=0.35, drop2=0.1, drop3=0.15, drop4=0.15,
+              depth1=2, depth2=4):
+    """DB-ATCNet from https://github.com/zk-xju/DB-ATCNet (Dual-Branch + ECA attention)."""
+    input_1 = Input(shape=(1, in_chans, in_samples))
+    input_2 = Permute((3, 2, 1))(input_1)
+    regRate = 0.25
+    F2 = eegn_F1 * eegn_D
+
+    block1 = _ADBC(input_layer=input_2, F1=eegn_F1, D=eegn_D, kernLength=eegn_kernelSize,
+                   poolSize=eegn_poolSize, in_chans=in_chans, dropout=eegn_dropout,
+                   drop1=drop1, depth1=depth1, depth2=depth2)
+    block1 = eca_attention(block1)
+    block1 = Lambda(lambda x: x[:, :, -1, :])(block1)
+
+    sw_concat = []
+    for i in range(n_windows):
+        st, end = i, block1.shape[1] - n_windows + i + 1
+        block2 = Lambda(lambda x, a=st, b=end: x[:, a:b, :])(block1)
+        block2 = attention_block(block2, 'mha')
+        block3 = _TCFN_DB(block2, input_dimension=F2, depth=tcn_depth, kernel_size=tcn_kernelSize,
+                         filters=tcn_filters, dropout=tcn_dropout, activation=tcn_activation,
+                         drop2=drop2, drop3=drop3, drop4=drop4)
+        block3 = Lambda(lambda x: x[:, -1, :])(block3)
+        sw_concat.append(Dense(n_classes, kernel_constraint=max_norm(regRate))(block3))
+
+    sw_concat = tf.keras.layers.Average()(sw_concat)
+    softmax = Activation('softmax', name='softmax')(sw_concat)
+    return Model(inputs=input_1, outputs=softmax)
+
+
+def _ADBC(input_layer, F1=4, kernLength=64, poolSize=8, D=2, in_chans=22, dropout=0.1,
+          drop1=0.3, depth1=2, depth2=4):
+    F2 = F1 * D
+    block1 = Conv2D(F1, (kernLength, 1), padding='same', data_format='channels_last', use_bias=False)(input_layer)
+    block1 = BatchNormalization(axis=-1)(block1)
+    block1 = eca_attention(block1)
+    block2 = DepthwiseConv2D((1, in_chans), depth_multiplier=depth1, use_bias=False,
+                             data_format='channels_last', depthwise_constraint=max_norm(1.))(block1)
+    block2 = BatchNormalization(axis=-1)(block2)
+    block2 = Activation('elu')(block2)
+    block2 = AveragePooling2D((8, 1), data_format='channels_last')(block2)
+    block2 = Dropout(dropout)(block2)
+    block3 = Conv2D(F2, (16, 1), data_format='channels_last', use_bias=False, padding='same')(block2)
+    block3 = BatchNormalization(axis=-1)(block3)
+    block3 = Activation('elu')(block3)
+    block3 = AveragePooling2D((poolSize, 1), data_format='channels_last')(block3)
+    block3 = Dropout(dropout)(block3)
+    block4 = DepthwiseConv2D((1, in_chans), depth_multiplier=depth2, use_bias=False,
+                             data_format='channels_last', depthwise_constraint=max_norm(1.))(block1)
+    block4 = BatchNormalization(axis=-1)(block4)
+    block4 = Activation('elu')(block4)
+    block4 = AveragePooling2D((8, 1), data_format='channels_last')(block4)
+    block4 = Dropout(dropout)(block4)
+    block5 = Conv2D(F2, (16, 1), data_format='channels_last', use_bias=False, padding='same')(block4)
+    block5 = BatchNormalization(axis=-1)(block5)
+    block5 = Activation('elu')(block5)
+    block5 = AveragePooling2D((poolSize, 1), data_format='channels_last')(block5)
+    block5 = Dropout(dropout)(block5)
+    out = Add()([block3, block5])
+    out = Dropout(drop1)(out)
+    return out
+
+
+def _TCFN_DB(input_layer, input_dimension, depth, kernel_size, filters, dropout,
+             drop2=0.1, drop3=0.15, drop4=0.15, activation='elu'):
+    block = Conv1D(filters, kernel_size=kernel_size, dilation_rate=1, activation='linear',
+                   padding='causal', kernel_initializer='he_uniform')(input_layer)
+    block = BatchNormalization()(block)
+    block = Activation(activation)(block)
+    block = Dropout(dropout)(block)
+    block = Conv1D(filters, kernel_size=kernel_size, dilation_rate=1, activation='linear',
+                   padding='causal', kernel_initializer='he_uniform')(block)
+    block = BatchNormalization()(block)
+    block = Activation(activation)(block)
+    block = Dropout(dropout)(block)
+    if input_dimension != filters:
+        conv = Conv1D(filters, kernel_size=1, padding='same')(input_layer)
+        added = Add()([block, conv])
+    else:
+        inp_d = Dropout(drop2)(input_layer)
+        added = Add()([block, inp_d])
+    out = Activation(activation)(added)
+    for i in range(depth - 1):
+        block = Conv1D(filters, kernel_size=kernel_size, dilation_rate=2**(i+1), activation='linear',
+                      padding='causal', kernel_initializer='he_uniform')(out)
+        block = BatchNormalization()(block)
+        block = Activation(activation)(block)
+        block = Dropout(dropout)(block)
+        inp_d = Dropout(drop3)(input_layer)
+        block = Add()([block, inp_d])
+        block = Conv1D(filters, kernel_size=kernel_size, dilation_rate=2**(i+1), activation='linear',
+                      padding='causal', kernel_initializer='he_uniform')(block)
+        block = BatchNormalization()(block)
+        block = Activation(activation)(block)
+        block = Dropout(dropout)(block)
+        inp_d = Dropout(drop4)(input_layer)
+        added = Add()([block, inp_d])
+        out = Activation(activation)(added)
+    return out
 
 
 def square(x):

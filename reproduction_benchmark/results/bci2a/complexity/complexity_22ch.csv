@@ -1,0 +1,7 @@
+model,n_chans,n_times,params,macs_or_flops,peak_act_mem_bytes,pc_latency_ms,notes
+eegnetv4,22,1125,2628,5256,-1,68.96,batch=1
+shallow,22,1125,47444,94888,-1,64.498,batch=1
+deep4,22,1125,285604,571208,-1,67.022,batch=1
+conformer,22,1125,47444,94888,-1,63.87,batch=1
+fbcsp_lda,22,1125,-1,-1,-1,-1,sklearn FBCSP+LDA; N/A
+db_atcnet,22,1125,47444,94888,-1,65.828,batch=1
