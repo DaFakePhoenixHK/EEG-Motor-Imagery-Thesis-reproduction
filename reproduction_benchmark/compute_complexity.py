@@ -29,7 +29,6 @@ def _count_params_keras(model):
 
 def _count_params_fbcsp():
     """Approximate params for FBCSP+LDA (sklearn)."""
-    # 8 bands * (n_components * n_chans * 2) CSP + LDA coeffs ~ few thousand
     return -1  # N/A for sklearn
 
 
@@ -57,9 +56,7 @@ def _estimate_macs_flops(model, n_channels, n_times):
     """Rough estimate or placeholder. Full profiling needs tf.profiler/other tools."""
     try:
         import tensorflow as tf
-        # tf.profiler is heavy; use simple param-based heuristic as fallback
         p = model.count_params()
-        # rough: ~2 MACs per param per forward pass
         return p * 2
     except Exception:
         return -1

@@ -2,7 +2,7 @@
 """
 Reproduction benchmark runner: BCI IV-2a protocols W, L, F, TTA.
 Usage:
-  python run_benchmark.py --data "/path/to/Four class motor imagery (001-2014)" --protocol W --model eegnetv4 --channels 8 --seed 0
+ python run_benchmark.py --data "/path/to/Four class motor imagery (001-2014)" --protocol W --model eegnetv4 --channels 8 --seed 0
 """
 import os
 import sys
@@ -151,14 +151,14 @@ def main():
                     print(f"[{protocol}] model={args.model} channels={n_channels} seed={seed} K={k}")
                     results = run_protocol(protocol, data_path, n_channels, args.model, seed, k, epochs, args.batch_size)
                     subdir, summary = save_results(results_dir, ch_label, protocol, args.model, seed, results, k)
-                    print(f"  mean_trialAcc: {summary['mean_trialAcc']:.4f} ± {summary['std_trialAcc']:.4f}")
-                    print(f"  -> {subdir}")
+                    print(f" mean_trialAcc: {summary['mean_trialAcc']:.4f} ± {summary['std_trialAcc']:.4f}")
+                    print(f" -> {subdir}")
             else:
                 print(f"[{protocol}] model={args.model} channels={n_channels} seed={seed}")
                 results = run_protocol(protocol, data_path, n_channels, args.model, seed, None, epochs, args.batch_size)
                 subdir, summary = save_results(results_dir, ch_label, protocol, args.model, seed, results)
-                print(f"  mean_trialAcc: {summary['mean_trialAcc']:.4f} ± {summary['std_trialAcc']:.4f}")
-                print(f"  -> {subdir}")
+                print(f" mean_trialAcc: {summary['mean_trialAcc']:.4f} ± {summary['std_trialAcc']:.4f}")
+                print(f" -> {subdir}")
 
     print("Done.")
 

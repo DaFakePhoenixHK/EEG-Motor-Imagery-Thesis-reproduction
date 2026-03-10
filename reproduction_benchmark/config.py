@@ -17,10 +17,10 @@ FS = 250
 IN_SAMPLES = 1125
 N_CHANNELS_FULL = 22
 
-# 8-channel subset: motor cortex (indices 0-based from BCI IV-2a 22ch)
-# Typical order: Fz, FC3, FC1, FCz, FC2, FC4, C3, C1, Cz, C2, C4, CP3, CP1, CPz, CP2, CP4, P1, Pz, P2, POz
-# Using FC1, FC2, FCz, C3, Cz, C4, CP1, CP2 (indices 2,4,3,6,8,9,10,11) for motor imagery
-EIGHT_CH_INDICES = [2, 3, 4, 6, 8, 9, 10, 11]
+# 8-channel subset: motor cortex, MUST include C3, Cz, C4 (core MI channels).
+# Indices 0-based into 22ch BNCI order: FCz(3), C3(7), C1(8), Cz(9), C2(10), C4(11), CP1(14), CP2(16).
+# See CHANNELS_8ch_evidence.md for rationale and STANDARD_CHANNELS mapping.
+EIGHT_CH_INDICES = [3, 7, 8, 9, 10, 11, 14, 16]
 
 # Protocol F: K per class grid
 K_PER_CLASS_GRID = [1, 5, 10, 20]
@@ -32,12 +32,12 @@ SEEDS = [0, 1, 2, 3, 4]
 MODELS = ["eegnetv4", "shallow", "deep4", "conformer", "fbcsp_lda", "db_atcnet"]
 
 # Experiment matrix: (channels) -> (protocol) -> [models]
-# 8ch: full coverage per plan 4.1 + db_atcnet (user addition)
+# 8ch: full coverage per plan 4.1 (W,L,F,TTA for all models) + db_atcnet
 MATRIX_8CH = {
     "W": ["fbcsp_lda", "eegnetv4", "shallow", "deep4", "conformer", "db_atcnet"],
     "L": ["fbcsp_lda", "eegnetv4", "shallow", "deep4", "conformer", "db_atcnet"],
-    "F": ["eegnetv4", "shallow", "conformer", "db_atcnet"],
-    "TTA": ["eegnetv4", "shallow", "conformer", "db_atcnet"],
+    "F": ["fbcsp_lda", "eegnetv4", "shallow", "deep4", "conformer", "db_atcnet"],
+    "TTA": ["fbcsp_lda", "eegnetv4", "shallow", "deep4", "conformer", "db_atcnet"],
 }
 # 22ch: minimal per plan 4.2 (no W)
 MATRIX_22CH = {

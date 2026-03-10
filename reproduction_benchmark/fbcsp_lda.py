@@ -4,10 +4,17 @@ Filter Bank CSP: bandpass in multiple bands, CSP per band, concatenate features,
 Uses MNE CSP + sklearn LDA. CSP fit only on training data (leakage-safe).
 
 References:
-  - https://github.com/orvindemsy/BCICIV2a-FBCSP
-  - Ang et al. 2012 Frontiers: https://www.frontiersin.org/articles/10.3389/fnins.2012.00039
+ - https://github.com/orvindemsy/BCICIV2a-FBCSP
+ - Ang et al. 2012 Frontiers: https://www.frontiersin.org/articles/10.3389/fnins.2012.00039
 """
 import numpy as np
+
+# Suppress MNE INFO messages ("Computing rank", "Estimating covariance", etc.)
+try:
+    import mne
+    mne.set_log_level("WARNING")
+except ImportError:
+    pass
 from scipy import signal as scipy_signal
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.multiclass import OneVsRestClassifier
@@ -58,7 +65,9 @@ def _fit_csp_per_band(X_train, y_train, n_components=4, n_classes=4):
         from mne.decoding import CSP
         from mne import create_info
         from mne.epochs import EpochsArray
-    except ImportError:
+    except ImportError as e:
+        import sys
+        print(f"FBCSP+LDA: MNE not installed ({e}). Falling back to random predictions (~25%%). Install with: pip install mne", file=sys.stderr)
         return None
     info = create_info(X_train.shape[1], FS, "eeg")
     all_csps = []
@@ -95,6 +104,12 @@ class FBCSP_LDA:
             X = X[:, 0, :, :]  # (N,1,C,T) -> (N,C,T)
         self.csp_list = _fit_csp_per_band(X, y, self.n_components, self.n_classes)
         if self.csp_list is None:
+            import warnings
+            warnings.warn(
+                "FBCSP+LDA: MNE unavailable or CSP fit failed. Using random predictions (~25%%). Install MNE: pip install mne",
+                UserWarning,
+                stacklevel=2,
+            )
             self._fallback = True
             return self
         self._fallback = False

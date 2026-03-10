@@ -1,131 +1,243 @@
-# Reproduction Benchmark — Usage
+# Reproduction Benchmark Command Guide
 
-BCI IV-2a reproduction benchmark (Protocol W, L, F, TTA per `reproduce_plan_for_Nathan.md`).
+This guide explains all practical commands for running the benchmark in WSL, including seed/protocol control and pause/resume/stop for long runs.
 
-## Prerequisites
+## 1) Go to the benchmark folder
 
-- Python 3.8+ with TensorFlow 2.x, scikit-learn, numpy, mne (for FBCSP+LDA)
-- BCI Competition IV-2a data in `Four class motor imagery (001-2014)` format (A01T.mat, A01E.mat, etc.)
+```bash
+cd /mnt/c/Users/User/Desktop/Thesis/files_replication/reproduction_benchmark
+```
 
-## Protocol–Model Matrix (Experiment Matrix)
+## 2) Data path behavior
 
-Only (channels, protocol, model) combinations in the matrix are run; others are skipped.
+- Default data path is taken from `run_8ch_only.sh`:
+  - `../../files2/Four class motor imagery (001-2014)`
+- If your dataset is elsewhere, set `BCI_DATA`:
 
-**8ch:**
-- W, L: fbcsp_lda, eegnetv4, shallow, deep4, conformer, db_atcnet
-- F, TTA: eegnetv4, shallow, conformer, db_atcnet
+```bash
+BCI_DATA="/mnt/c/Users/User/Desktop/Thesis/files2/Four class motor imagery (001-2014)" bash run_8ch_only.sh
+```
 
-**22ch (no W):**
-- L, F: shallow, conformer, db_atcnet
-- TTA: conformer only
+## 3) Current 8-channel set
 
-## Command-line options
+From `config.py`:
+- `EIGHT_CH_INDICES = [3, 7, 8, 9, 10, 11, 14, 16]`
+- Channels: `FCz, C3, C1, Cz, C2, C4, CP1, CP2`
+
+This includes the required core MI channels: `C3`, `Cz`, `C4`.
+
+## 4) Main script: `run_8ch_only.sh`
+
+This is the recommended script for 8ch experiments. It supports:
+- protocol selection
+- seed selection
+- F-protocol K-value selection
+- graceful stop point
+- pause/resume/stop via control files
+
+### 4.1 Run all 8ch protocols and all seeds
+
+```bash
+bash run_8ch_only.sh
+```
+
+Defaults:
+- `PROTOCOLS="W L F TTA"`
+- `SEEDS="0 1 2 3 4"`
+- `K_VALUES="1 5 10 20"`
+
+### 4.2 Run only one seed
+
+```bash
+SEEDS="0" bash run_8ch_only.sh
+```
+
+### 4.3 Run only selected protocols
+
+```bash
+PROTOCOLS="W L" SEEDS="0 1" bash run_8ch_only.sh
+```
+
+### 4.4 Run only Protocol TTA for seeds 0 and 1
+
+```bash
+PROTOCOLS="TTA" SEEDS="0 1" bash run_8ch_only.sh
+```
+
+### 4.5 Run only Protocol F with custom K grid
+
+```bash
+PROTOCOLS="F" SEEDS="0 1" K_VALUES="1 5 10 20" bash run_8ch_only.sh
+```
+
+### 4.6 Stop automatically after a seed boundary
+
+Example: stop after finishing `Protocol F`, `seed 1`:
+
+```bash
+STOP_AFTER_PROTOCOL=F STOP_AFTER_SEED=1 bash run_8ch_only.sh
+```
+
+This exits cleanly after the script completes all runs for that protocol/seed.
+
+## 5) Pause / Resume / Stop during a long run
+
+`run_8ch_only.sh` reads control files under:
+- `.run_control/pause`
+- `.run_control/stop`
+
+Important: use a **second terminal** while training is running.
+
+### 5.1 Terminal A (start run)
+
+```bash
+cd /mnt/c/Users/User/Desktop/Thesis/files_replication/reproduction_benchmark
+bash run_8ch_only.sh
+```
+
+### 5.2 Terminal B (control run)
+
+```bash
+cd /mnt/c/Users/User/Desktop/Thesis/files_replication/reproduction_benchmark
+```
+
+Pause:
+
+```bash
+touch .run_control/pause
+```
+
+Resume:
+
+```bash
+rm -f .run_control/pause
+```
+
+Graceful stop (after current `run_benchmark.py` call finishes):
+
+```bash
+touch .run_control/stop
+```
+
+If you are in one terminal only, `Ctrl+C` is the only immediate control.
+
+## 6) Direct single-command runs (`run_benchmark.py`)
+
+### 6.1 One model, one protocol, one seed
+
+```bash
+python3 run_benchmark.py \
+  --data "/mnt/c/Users/User/Desktop/Thesis/files2/Four class motor imagery (001-2014)" \
+  --protocol W \
+  --model eegnetv4 \
+  --channels 8 \
+  --seed 0
+```
+
+### 6.2 Protocol F with a specific K
+
+```bash
+python3 run_benchmark.py \
+  --data "/mnt/c/Users/User/Desktop/Thesis/files2/Four class motor imagery (001-2014)" \
+  --protocol F \
+  --model deep4 \
+  --channels 8 \
+  --seed 1 \
+  --k_per_class 10
+```
+
+### 6.3 Protocol TTA for one model, seed 0
+
+```bash
+python3 run_benchmark.py \
+  --data "/mnt/c/Users/User/Desktop/Thesis/files2/Four class motor imagery (001-2014)" \
+  --protocol TTA \
+  --model db_atcnet \
+  --channels 8 \
+  --seed 0
+```
+
+## 7) Existing helper script: `run_all_single_seed.sh`
+
+This script runs a mixed 8ch+22ch matrix with seed 0.
+
+```bash
+bash run_all_single_seed.sh
+```
+
+Note:
+- Use `run_8ch_only.sh` for full 8ch control and pause/resume/stop features.
+
+## 8) Results location
+
+Outputs are written under:
 
 ```text
---protocol W | L | F | TTA
---model eegnetv4 | shallow | deep4 | conformer | fbcsp_lda | db_atcnet
---channels 8 | 22
---seed 0
-```
-
-**Additional options:**
-- `--data PATH` — BCI IV-2a folder (default: `../files2/Four class motor imagery (001-2014)`)
-- `--results_dir PATH` — Output directory (default: `./results`)
-- `--k_per_class N` — For Protocol F only; K trials per class (default: 1)
-- `--run_all_protocols` — Run W, L, F, TTA in one call (F uses default K)
-- `--run_all_k` — For Protocol F: run K=1,5,10,20
-- `--epochs N` — Max epochs (default: 500; early stopping: start_epoch=100, patience=80)
-- `--batch_size N` — Batch size (default: 64)
-
-## Example commands
-
-**Protocol W (within-subject), EEGNetv4, 8ch, seed 0:**
-```bash
-python run_benchmark.py --protocol W --model eegnetv4 --channels 8 --seed 0
-```
-
-**Protocol L (LOSO), Shallow, 22ch:**
-```bash
-python run_benchmark.py --protocol L --model shallow --channels 22 --seed 0
-```
-
-**Protocol F, K=5 per class:**
-```bash
-python run_benchmark.py --protocol F --model eegnetv4 --channels 8 --k_per_class 5 --seed 0
-```
-
-**Protocol F, all K values (1,5,10,20):**
-```bash
-python run_benchmark.py --protocol F --model eegnetv4 --channels 8 --run_all_k --seed 0
-```
-
-**All protocols (W, L, F, TTA), EEGNetv4:**
-```bash
-python run_benchmark.py --protocol W --model eegnetv4 --channels 8 --run_all_protocols --seed 0
-```
-(Use `--protocol W` as placeholder when `--run_all_protocols`; all four run.)
-
-**Custom data path (WSL):**
-```bash
-python run_benchmark.py --data "/mnt/c/Users/User/Desktop/Thesis/files2/Four class motor imagery (001-2014)" --protocol W --model eegnetv4 --channels 8 --seed 0
-```
-
-## Output layout
-
-Per run:
-```
 results/bci2a/accuracy/{8ch|22ch}/{W|L|F|TTA}/{model}/seed_{s}/
-  subjectwise.csv      # one row per subject: subject, trialAcc, macroF1, kappa, ITR
-  summary.csv          # mean_trialAcc, std_trialAcc, median_trialAcc, iqr_trialAcc, mean_macroF1, std_macroF1
-  confusion_{1..9}.csv # per-subject confusion matrix (optional)
 ```
 
-For Protocol F with K:
-```
-results/bci2a/accuracy/8ch/F/eegnetv4/seed_0/K5/
-  subjectwise.csv
-  summary.csv
-  confusion_{1..9}.csv
+For Protocol F:
+
+```text
+.../F/{model}/seed_{s}/K{k}/
 ```
 
-**Global rollups** (after running `aggregate_results.py`):
-```
-results/bci2a/results_summary_acc.csv   # channels, protocol, model, seed, mean_trialAcc, std_trialAcc, ...
-results/bci2a/results_subjectwise.csv   # subject, channels, protocol, model, seed, trialAcc, macroF1, ...
-```
+## 9) Preserve old results before a new run
 
-**Complexity metrics** (after running `compute_complexity.py`):
-```
-results/bci2a/complexity/complexity_8ch.csv
-results/bci2a/complexity/complexity_22ch.csv
+```bash
+mv results results_backup_$(date +%Y%m%d_%H%M%S)
+mkdir -p results
 ```
 
-## How it works
+or simply rename:
 
-1. **data_loader.py** — Loads BCI IV-2a via `preprocess.load_BCI2a_data`; 8ch uses a motor-cortex subset.
-2. **protocols.py** — Implements W (train session1, test session2), L (LOSO), F (few-shot calibration), TTA (causal EA). Uses 500 epochs + early stopping (start_epoch=100, patience=80).
-3. **models_registry.py** — Builds models: EEGNet, ShallowConvNet, DeepConvNet, FBCSP+LDA, DB-ATCNet. `conformer` falls back to ShallowConvNet (EEGConformer requires PyTorch/Braindecode).
-4. **run_benchmark.py** — CLI entry point: parses args, enforces protocol–model matrix, runs protocol, writes results + confusion matrices.
-5. **compute_complexity.py** — Computes params, MACs, latency for each model (8ch/22ch).
-6. **aggregate_results.py** — Aggregates all runs into `results_summary_acc.csv` and `results_subjectwise.csv`.
+```bash
+mv results results_old
+```
 
-## Protocol summary
+## 10) Aggregate results after runs
 
-| Protocol | Train | Calibration | Test |
-|----------|-------|-------------|------|
-| W | Subject session1 | — | Subject session2 |
-| L | Others session1 | — | Target session2 |
-| F | Others session1 | Target session1, K per class | Target session2 |
-| TTA | Others session1 | — | Target session2 (causal EA) |
+```bash
+python3 aggregate_results.py
+```
 
-## Model links (references)
+Generates:
+- `results/bci2a/results_summary_acc.csv`
+- `results/bci2a/results_subjectwise.csv`
 
-- **FBCSP+LDA**: https://github.com/orvindemsy/BCICIV2a-FBCSP — Filter Bank CSP + One-vs-Rest LDA.
-- **DB-ATCNet**: https://github.com/zk-xju/DB-ATCNet — Dual-Branch Convolution + ECA attention (TensorFlow).
-- **EEGConformer**: https://github.com/eeyhsong/EEG-Conformer — Original repo. Braindecode: `braindecode.models.EEGConformer` (PyTorch). Not integrated in this benchmark (requires PyTorch training loop).
+## 11) Compute model complexity
 
-## Validation
+```bash
+python3 compute_complexity.py
+```
 
-With 500 epochs + early stopping (start_epoch=100, patience=80):
-- BCI IV-2a within-subject (Protocol W) typically reaches ~60–80% with sufficient training.
-- Use `--epochs 100` for quicker validation runs.
+Generates:
+- `results/bci2a/complexity/complexity_8ch.csv`
+- `results/bci2a/complexity/complexity_22ch.csv`
+
+## 12) Quick command cookbook
+
+Run only TTA, seeds 0 and 1:
+
+```bash
+PROTOCOLS="TTA" SEEDS="0 1" bash run_8ch_only.sh
+```
+
+Run W+L only, seed 0:
+
+```bash
+PROTOCOLS="W L" SEEDS="0" bash run_8ch_only.sh
+```
+
+Run F only, all seeds:
+
+```bash
+PROTOCOLS="F" bash run_8ch_only.sh
+```
+
+Run all protocols, stop after F seed 1:
+
+```bash
+STOP_AFTER_PROTOCOL=F STOP_AFTER_SEED=1 bash run_8ch_only.sh
+```
+

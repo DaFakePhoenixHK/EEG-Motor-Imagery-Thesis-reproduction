@@ -62,7 +62,7 @@ def _fit_model(model, model_name, X_tr, y_tr_oh, X_val, y_val_oh, epochs, batch_
     if not isinstance(callbacks, list):
         callbacks = [callbacks]
     history = model.fit(X_tr, y_tr_oh, validation_data=(X_val, y_val_oh), epochs=epochs,
-                        batch_size=batch_size, callbacks=callbacks, verbose=1)
+                       batch_size=batch_size, callbacks=callbacks, verbose=1)
     return model, history
 
 
